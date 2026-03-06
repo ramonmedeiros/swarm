@@ -1,0 +1,4 @@
+# OpenClaw-style memory: timestamped logs stay local; MEMORY.md can be committed
+.swarm/memory/logs
+
+.env

@@ -12,7 +12,7 @@ from ..agents import register_default_agents
 from ..config import Settings, get_settings
 from ..llm import GeminiClient
 from ..logging import configure_logging
-from ..memory import InMemoryStore
+from ..memory import FilesystemMemoryStore
 from ..orchestrator import Router, Swarm
 
 logger = logging.getLogger("swarm.api")
@@ -35,7 +35,7 @@ def _build_swarm(settings: Settings) -> Swarm:
     llm = GeminiClient(api_key=settings.gemini_api_key)
     registry = register_default_agents(llm=llm, model=settings.gemini_model)
     router = Router()
-    memory = InMemoryStore()
+    memory = FilesystemMemoryStore(settings.swarm_memory_dir)
     return Swarm(registry=registry, router=router, memory=memory, max_steps=settings.swarm_max_steps)
 
 
