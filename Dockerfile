@@ -6,6 +6,7 @@ WORKDIR /app
 # Install package and production dependencies (no dev)
 COPY pyproject.toml .
 COPY src/ src/
+COPY README.md .
 RUN pip install --no-cache-dir .
 
 # Non-root user
