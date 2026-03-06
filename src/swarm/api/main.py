@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from contextvars import ContextVar
-from typing import Any
+from pathlib import Path
+from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 
 from ..agents import register_default_agents
@@ -94,6 +97,60 @@ def create_app(*, swarm: Swarm | None = None) -> FastAPI:
 
         result = swarm_obj.run(task_input=payload.input, max_steps=payload.max_steps)
         return TaskResponse(task_id=result.task_id, output=result.output, trace=result.trace)
+
+    def _memory_dir() -> Path:
+        s: Settings | None = app.state.settings
+        if s is None:
+            raise HTTPException(
+                status_code=503,
+                detail="Settings not configured; memory directory unavailable.",
+            )
+        return Path(s.swarm_memory_dir).resolve()
+
+    async def _sse_memory_files() -> AsyncIterator[str]:
+        root = _memory_dir()
+        if not root.exists():
+            yield f"data: {json.dumps([])}\n\n"
+            return
+        files: list[str] = []
+        for p in sorted(root.rglob("*")):
+            if p.is_file():
+                try:
+                    files.append(str(p.relative_to(root)))
+                except ValueError:
+                    continue
+        yield f"data: {json.dumps(files)}\n\n"
+
+    @app.get("/v1/memory/files")
+    async def stream_memory_files() -> StreamingResponse:
+        """Stream available file paths in the memory directory via SSE."""
+        return StreamingResponse(
+            _sse_memory_files(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+
+    @app.get("/v1/memory/content/{file_path:path}")
+    async def get_memory_file_content(file_path: str) -> Response:
+        """Return the content of a file inside the memory directory."""
+        root = _memory_dir()
+        if not root.exists():
+            raise HTTPException(status_code=404, detail="Memory directory not found")
+        resolved = (root / file_path).resolve()
+        try:
+            if not resolved.is_relative_to(root):
+                raise HTTPException(status_code=403, detail="Path outside memory directory")
+        except AttributeError:
+            if not str(resolved).startswith(str(root)):
+                raise HTTPException(status_code=403, detail="Path outside memory directory")
+        if not resolved.is_file():
+            raise HTTPException(status_code=404, detail="File not found")
+        content = resolved.read_text(encoding="utf-8")
+        return Response(content=content, media_type="text/plain; charset=utf-8")
 
     return app
 
