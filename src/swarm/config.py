@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     gemini_model: str = Field(default="gemini-2.0-flash", alias="GEMINI_MODEL")
 
     swarm_max_steps: int = Field(default=6, alias="SWARM_MAX_STEPS")
-    swarm_memory_dir: str = Field(default=".swarm/memory", alias="SWARM_MEMORY_DIR")
+    swarm_memory_dir: str = Field(default="memory/", alias="SWARM_MEMORY_DIR")
 
     log_level: str = Field(default="INFO", alias="LOG_LEVEL")
 
