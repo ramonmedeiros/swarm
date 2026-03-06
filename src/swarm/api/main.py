@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import uuid
@@ -123,11 +124,9 @@ def create_app(*, swarm: Swarm | None = None) -> FastAPI:
             )
         return Path(s.swarm_memory_dir).resolve()
 
-    async def _sse_memory_files() -> AsyncIterator[str]:
-        root = _memory_dir()
+    def _memory_file_list(root: Path) -> list[str]:
         if not root.exists():
-            yield f"data: {json.dumps([])}\n\n"
-            return
+            return []
         files: list[str] = []
         for p in sorted(root.rglob("*")):
             if p.is_file():
@@ -135,13 +134,21 @@ def create_app(*, swarm: Swarm | None = None) -> FastAPI:
                     files.append(str(p.relative_to(root)))
                 except ValueError:
                     continue
-        yield f"data: {json.dumps(files)}\n\n"
+        return files
+
+    async def _sse_memory_files(interval: float = 2.0) -> AsyncIterator[str]:
+        root = _memory_dir()
+        while True:
+            files = _memory_file_list(root)
+            yield f"data: {json.dumps(files)}\n\n"
+            await asyncio.sleep(interval)
 
     @app.get("/v1/memory/files")
-    async def stream_memory_files() -> StreamingResponse:
-        """Stream available file paths in the memory directory via SSE."""
+    async def stream_memory_files(interval: int = 2) -> StreamingResponse:
+        """Stream available file paths in the memory directory via SSE. Rescans every `interval` seconds (1-60)."""
+        interval = max(1, min(60, interval))
         return StreamingResponse(
-            _sse_memory_files(),
+            _sse_memory_files(interval=float(interval)),
             media_type="text/event-stream",
             headers={
                 "Cache-Control": "no-cache",
