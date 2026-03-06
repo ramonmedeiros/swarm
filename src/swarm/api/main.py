@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any, AsyncIterator
 
 from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, ValidationError
 
@@ -44,6 +45,21 @@ def _build_swarm(settings: Settings) -> Swarm:
 
 def create_app(*, swarm: Swarm | None = None) -> FastAPI:
     app = FastAPI(title="epiminds-swarm", version="0.1.0")
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=[
+            "http://localhost",
+            "http://localhost:3000",
+            "http://localhost:8000",
+            "http://127.0.0.1",
+            "http://127.0.0.1:3000",
+            "http://127.0.0.1:8000",
+        ],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
     app.state.settings = None
     app.state.swarm = swarm
